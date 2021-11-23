@@ -48,7 +48,7 @@ async def ping(ctx):
 @bot.command(name='valorant')
 async def val_giveaways(ctx):
     tweets = api.get_valorant_giveaways()
-    for i in range(0, len(tweets) - 30):
+    for i in range(0, len(tweets) - 50):
         tweets.pop()
 
     text = ''
