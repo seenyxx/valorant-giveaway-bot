@@ -48,16 +48,20 @@ async def ping(ctx):
 @bot.command(name='valorant')
 async def val_giveaways(ctx):
     tweets = api.get_valorant_giveaways()
-    for i in range(0, len(tweets) - 50):
-        tweets.pop()
+    del tweets[22:]
 
     text = ''
 
     for tweet in tweets:
-        
-        title = tweet['title']
-        text = text + '**[`🔗 Go to tweet`](https://twitter.com/{}/status/{}) │ [`{}`](https://twitter.com/{})** *`{}`*\n'.format(tweet['authorUser'].replace('@', ''), tweet['id'], '{:<16}'.format(tweet['authorUser']), tweet['authorUser'].replace('@', ''), '{:<35}'.format(de_emojify(title[:30].strip()) + '...'))
+        if not 'authorUser' in tweet:
+            continue
 
+        stats = tweet['publicMetrics']
+        title = tweet['title']
+        text = text + '**[`🔗 Go to tweet`](https://twitter.com/{}/status/{}) │ [`{}`](https://twitter.com/{})** │ *`{}`* │ `{}🔁`\n'.format(tweet['authorUser'].replace('@', ''), tweet['id'], '{:<16}'.format(tweet['authorUser']), tweet['authorUser'].replace('@', ''), '{:<35}'.format(de_emojify(title[:30].strip()) + '...'), stats['retweet_count'])
+    
+    print(len(text))
+    
     embed = Embed(title='VALORANT Giveaways', description=text, color=0xFF4454)
     embed.set_footer(text='Updated every 12h at UTC time | Data from the last 7 days')
     await ctx.reply(embed=embed)
