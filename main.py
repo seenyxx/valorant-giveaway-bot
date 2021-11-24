@@ -27,13 +27,17 @@ def de_emojify(data):
         u"\ufe0f"  # dingbats
         u"\u3030"
     "]+", re.UNICODE)
-    return re.sub(emoj, '', data)
+    return re.sub(emoj, '', data).strip()
 
 def load_config():
     with open('config.yml') as file:
         data = file.read()
         parsed_data = load_yaml(data, Loader=Loader)
     return parsed_data
+
+def divide_chunks(l, n):
+    for i in range(0, len(l), n): 
+        yield l[i:i + n]
 
 config = load_config()
 
@@ -47,24 +51,25 @@ async def ping(ctx):
 @commands.cooldown(1, 10, commands.BucketType.channel)
 @bot.command(name='valorant')
 async def val_giveaways(ctx):
-    tweets = api.get_valorant_giveaways()
-    del tweets[22:]
+    fetched_tweets = api.get_valorant_giveaways()
+    tweets_chunks = divide_chunks(fetched_tweets, 20)
 
-    text = ''
+    pg = 0
+    for tweets in tweets_chunks:
+        pg += 1
+        text = ''
 
-    for tweet in tweets:
-        if not 'authorUser' in tweet:
-            continue
+        for tweet in tweets:
+            if not 'authorUser' in tweet:
+                continue
 
-        stats = tweet['publicMetrics']
-        title = tweet['title']
-        text = text + '**[`🔗 Go to tweet`](https://twitter.com/{}/status/{}) │ [`{}`](https://twitter.com/{})** │ *`{}`* │ `{}🔁`\n'.format(tweet['authorUser'].replace('@', ''), tweet['id'], '{:<16}'.format(tweet['authorUser']), tweet['authorUser'].replace('@', ''), '{:<35}'.format(de_emojify(title[:30].strip()) + '...'), stats['retweet_count'])
-    
-    print(len(text))
-    
-    embed = Embed(title='VALORANT Giveaways', description=text, color=0xFF4454)
-    embed.set_footer(text='Updated every 12h at UTC time | Data from the last 7 days')
-    await ctx.reply(embed=embed)
+            stats = tweet['publicMetrics']
+            title = tweet['title'].strip()
+            text = text + '**[`🔗 Go to tweet`](https://twitter.com/{}/status/{}) │ [`{}`](https://twitter.com/{})** │ *`{}`* │ `[{:<4}🔁]`\n'.format(tweet['authorUser'].replace('@', ''), tweet['id'], '{:<16}'.format(tweet['authorUser']), tweet['authorUser'].replace('@', ''), '{:<20}'.format(de_emojify(title[:17].strip()) + '...'), stats['retweet_count'])
+        
+        embed = Embed(title='VALORANT Giveaways Page [{}/{}]'.format(pg, floor(len(fetched_tweets) / 20) if len(fetched_tweets) % 20 == 0 else floor(len(fetched_tweets) / 20) + 1), description=text, color=0xFF4454)
+        embed.set_footer(text='Giveaways all sourced from twitter | Updated every 12h at UTC time | Data from the last 7 days')
+        await ctx.channel.send(embed=embed)
 
 
 @bot.event
