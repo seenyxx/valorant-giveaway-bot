@@ -5,6 +5,9 @@ from nextcord.ext import commands
 from nextcord.activity import ActivityType, Activity
 from yaml import load as load_yaml, Loader
 import re
+import asyncio
+
+from nextcord.message import Message
 
 def de_emojify(data):
     emoj = re.compile("["
@@ -51,9 +54,13 @@ async def ping(ctx):
 @commands.cooldown(1, 10, commands.BucketType.channel)
 @bot.command(name='valorant')
 async def val_giveaways(ctx):
-    fetched_tweets = api.get_valorant_giveaways()
+    res_tweets = api.get_valorant_giveaways()
+    fetched_tweets = sorted(res_tweets, key= lambda d: d['publicMetrics']['retweet_count'])
     tweets_chunks = divide_chunks(fetched_tweets, 20)
     percentage_chances = []
+    embed_pages = []
+    current_page = 0
+    total_pages = floor(len(fetched_tweets) / 20) - 1 if len(fetched_tweets) % 20 == 0 else floor(len(fetched_tweets) / 20)
 
     pg = 0
     for tweets in tweets_chunks:
@@ -72,12 +79,14 @@ async def val_giveaways(ctx):
             else:
                 percentage_chances.append(1)
 
-            text = text + '**[`🔗 Go to tweet`](https://twitter.com/{}/status/{}) │ [`{}`](https://twitter.com/{})** │ *`{}`* │ `[{:<4}🔁]`\n'.format(tweet['authorUser'].replace('@', ''), tweet['id'], '{:<16}'.format(tweet['authorUser']), tweet['authorUser'].replace('@', ''), '{:<20}'.format(de_emojify(title[:17].strip()) + '...'), stats['retweet_count'])
+            text = text + '**[`🔗 Go to tweet`](https://twitter.com/{}/status/{}) │ [`{}`](https://twitter.com/{})** │ *`{}`* │ `{:<6}🔁`\n'.format(tweet['authorUser'].replace('@', ''), tweet['id'], '{:<16}'.format(tweet['authorUser']), tweet['authorUser'].replace('@', ''), '{:<20}'.format(de_emojify(title[:17].strip()).replace('*', '') + '...'), stats['retweet_count'])
         
-        embed = Embed(title='VALORANT Giveaways Page [{}/{}]'.format(pg, floor(len(fetched_tweets) / 20) if len(fetched_tweets) % 20 == 0 else floor(len(fetched_tweets) / 20) + 1), description=text, color=0xFF4454)
-        embed.set_footer(text='Giveaways all sourced from twitter | Updated every 12h at UTC time | Data from the last 7 days')
-        await ctx.channel.send(embed=embed)
-    
+        embed_pages.append(text)
+
+    embed = Embed(title='VALORANT Giveaways Page [{}/{}]'.format(current_page + 1, total_pages + 1), description=embed_pages[0], color=0xFF4454)
+    embed.set_footer(text='Giveaways all sourced from twitter | Updated every 12h at UTC time | Data from the last 7 days')
+    info_message: Message = await ctx.channel.send(embed=embed)
+
     chance = 1
 
     for percentage in percentage_chances:
@@ -86,6 +95,33 @@ async def val_giveaways(ctx):
     embed = Embed(title='Chance of winning', description='```fix\n{:.5}%```'.format(100 - chance * 100), color=0xFF4454)
     embed.set_footer(text='Chance of winning once | Assumes that every giveaway only has 1 winner | Uses the retweet statistic')
     await ctx.channel.send(embed=embed)
+
+    await info_message.add_reaction('⬅️')
+    await info_message.add_reaction('➡️')
+
+    def check(reaction, user):
+        return user == ctx.author and str(reaction.emoji) in ['⬅️', '➡️']
+
+    while True:
+        try:
+            reaction, user = await bot.wait_for('reaction_add', timeout=90, check=check)
+
+            if str(reaction.emoji) == '➡️' and current_page != total_pages:
+                await info_message.remove_reaction(reaction, user)
+                current_page += 1
+                embed = Embed(title='VALORANT Giveaways Page [{}/{}]'.format(current_page + 1, total_pages + 1), description=embed_pages[current_page], color=0xFF4454)
+                embed.set_footer(text='Giveaways all sourced from twitter | Updated every 12h at UTC time | Data from the last 7 days')
+                await info_message.edit(embed=embed)
+            elif str(reaction.emoji) == '⬅️' and current_page > 0:
+                await info_message.remove_reaction(reaction, user)
+                current_page -= 1
+                embed = Embed(title='VALORANT Giveaways Page [{}/{}]'.format(current_page + 1, total_pages + 1), description=embed_pages[current_page], color=0xFF4454)
+                embed.set_footer(text='Giveaways all sourced from twitter | Updated every 12h at UTC time | Data from the last 7 days')
+                await info_message.edit(embed=embed)
+            else:
+                await info_message.remove_reaction(reaction, user)
+        except asyncio.TimeoutError:
+            await info_message.clear_reactions()
 
 
 
