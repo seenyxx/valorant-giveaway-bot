@@ -39,8 +39,8 @@ def load_config():
     return parsed_data
 
 def divide_chunks(l, n):
-    for i in range(0, len(l), n): 
-        yield l[i:i + n]
+    n = max(1, n)
+    return (l[i:i+n] for i in range(0, len(l), n))
 
 config = load_config()
 
@@ -55,12 +55,13 @@ async def ping(ctx):
 @bot.command(name='valorant')
 async def val_giveaways(ctx):
     res_tweets = api.get_valorant_giveaways()
-    fetched_tweets = sorted(res_tweets, key= lambda d: d['publicMetrics']['retweet_count'])
-    tweets_chunks = divide_chunks(fetched_tweets, 20)
+    fetched_tweets = sorted(filter(lambda d: 'authorUser' in d, res_tweets), key= lambda d: d['publicMetrics']['retweet_count'])
+    tweets_chunks = list(divide_chunks(fetched_tweets, 12))
+
     percentage_chances = []
     embed_pages = []
     current_page = 0
-    total_pages = floor(len(fetched_tweets) / 20) - 1 if len(fetched_tweets) % 20 == 0 else floor(len(fetched_tweets) / 20)
+    total_pages = len(tweets_chunks) - 1
 
     pg = 0
     for tweets in tweets_chunks:
@@ -68,8 +69,6 @@ async def val_giveaways(ctx):
         text = ''
 
         for tweet in tweets:
-            if not 'authorUser' in tweet:
-                continue
 
             stats = tweet['publicMetrics']
             title = tweet['title'].strip()
@@ -91,7 +90,7 @@ async def val_giveaways(ctx):
 
     for percentage in percentage_chances:
         chance *= percentage 
-    
+
     embed = Embed(title='Chance of winning', description='```fix\n{:.5}%```'.format(100 - chance * 100), color=0xFF4454)
     embed.set_footer(text='Chance of winning once | Assumes that every giveaway only has 1 winner | Uses the retweet statistic')
     await ctx.channel.send(embed=embed)
@@ -125,13 +124,13 @@ async def val_giveaways(ctx):
 
 
 
-# @bot.event
-# async def on_command_error(ctx, error):
-#     if isinstance(error, commands.CommandOnCooldown):
-#         embed = Embed(title='You cannot use this command yet! ⌚',description='Try again in **{:.2f} seconds**'.format(error.retry_after), color=0x001b3b)
-#         await ctx.send(embed=embed)
-#     else:
-#         print(error)
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandOnCooldown):
+        embed = Embed(title='You cannot use this command yet! ⌚',description='Try again in **{:.2f} seconds**'.format(error.retry_after), color=0x001b3b)
+        await ctx.send(embed=embed)
+    else:
+        print(error)
 
 @bot.event
 async def on_ready():
